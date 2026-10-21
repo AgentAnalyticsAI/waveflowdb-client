@@ -1,0 +1,5 @@
+logs/
+venv/
+upload/
+msil_usage/
+.env

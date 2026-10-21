@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "waveflowdb_client" 
+version = "1.0.6"
+description = "VectorLake SDK — Deterministic backend engine powering agent workflows"
+readme = "readme.md"
+requires-python = ">=3.8"
+license = {file = "LICENSE"}
+
+authors = [
+  { name = "agentanalytics.ai", email = "nitin@agentanalytics.ai" }
+]
+
+keywords = ["vector db", "VECTOR QUERY LANGUAGE", "waveflowdb", "agentanalytics", "VQL"]
+
+dependencies = [
+    "requests",
+    "numpy",
+    "tqdm",
+    "python-dotenv",
+]
+
+[project.optional-dependencies]
+documents = [
+    "PyPDF2",
+    "python-docx",
+    "tqdm",
+    "PyMuPDF",
+    "pytesseract",
+    "requests",
+]
+
+cloud-ocr = [
+    "boto3",
+    "google-cloud-vision",
+    "azure-ai-documentintelligence",
+]
+
+[project.urls]
+Homepage = "https://agentanalytics.ai"
+Documentation = "https://www.agentanalytics.ai/docs/waveflow-db"
