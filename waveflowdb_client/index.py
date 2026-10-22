@@ -195,6 +195,75 @@ class Index:
             **kwargs,
         )
 
+    def insert(
+        self,
+        documents: Optional[List[str]] = None,
+        ids: Optional[List[str]] = None,
+        files: Optional[List[str]] = None,
+        metadatas: FilesMetaArg = None,
+        **kwargs: Any,
+    ) -> Dict[str, Any]:
+        """
+        Insert documents into the index (server-side ``insert_docs`` semantics —
+        distinct from :meth:`add`; see :meth:`VectorLakeClient.run_insert_path`
+        / :meth:`VectorLakeClient.run_insert_path_direct` for the underlying
+        behaviour).
+
+        Same calling convention as :meth:`add`:
+
+        In-memory text (Chroma-style)::
+
+            index.insert(documents=["full text of doc one", "..."], ids=["a.txt", "b.txt"])
+
+        Local files (reads from ``config.vector_lake_path``, chunks, uploads)::
+
+            index.insert(files=["report.pdf", "notes.docx"])
+            index.insert()   # ingest everything under vector_lake_path
+
+        ``metadatas`` follows the same dict-vs-list rules documented on
+        :meth:`add`. Any extra keyword (``processing_mode="streaming"``,
+        ``intelligent_segmentation=False``, ``start_from_batch``, ``end_batch``,
+        ...) is forwarded to the underlying client method.
+
+        Note: unlike :meth:`add`, in-memory mode here requires at least one
+        document (there is no batching/progress-bar path for insert) — the
+        underlying client raises a ``ValidationError`` response if
+        *documents*/*ids* resolve to an empty list.
+        """
+        if documents is not None:
+            ids = ids or [f"doc_{i}.txt" for i in range(len(documents))]
+            if len(ids) != len(documents):
+                raise ValueError("ids and documents must be the same length")
+            ids = [clean_filename(i) for i in ids]
+
+            if isinstance(metadatas, list) and len(metadatas) != len(documents):
+                raise ValueError("metadatas and documents must be the same length")
+
+            return self._client.run_insert_path_direct(
+                user_id=self.user_id,
+                vector_lake_description=self.name,
+                files_name=ids,
+                files_data=documents,
+                files_meta=metadatas,
+                **kwargs,
+            )
+
+        if isinstance(metadatas, list):
+            raise ValueError(
+                "metadatas must be a dict keyed by filename when using files= "
+                "(path mode) — a positional list can't be reliably aligned to "
+                "files once the SDK splits/interleaves them into chunks. "
+                'Use e.g. metadatas={"report.pdf": {"author": "alice"}} instead.'
+            )
+
+        return self._client.run_insert_path(
+            user_id=self.user_id,
+            vector_lake_description=self.name,
+            files=files,
+            files_meta=metadatas,
+            **kwargs,
+        )
+
     def delete(self, ids: List[str]) -> Dict[str, Any]:
         """Remove documents from the index by id (filename)."""
         return self._client.delete_documents(
@@ -352,20 +421,6 @@ class Index:
             vector_lake_description=self.name,
         )
 
-    def list_indexes(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-        """List every namespace visible to *user_id*."""
-        resolved_user = user_id or self.user_id
-        if not resolved_user:
-            raise ValueError("user_id is required to list indexes.")
-        return self._client.get_namespace_details(user_id=resolved_user)
-
-    def health(self) -> Dict[str, Any]:
-        """Ping the server. Returns ``{"status": "ok", ...}`` when healthy."""
-        return self._client.health_check(
-            user_id=self.user_id,
-            vector_lake_description=self.name,
-        )
-
 
 class VectorLake:
     """
@@ -413,21 +468,19 @@ class VectorLake:
     # lower-case alias for folks coming from Qdrant/Weaviate-style SDKs
     index = Index
 
-    rjt: cr start
-    # def list_indexes(self, user_id: Optional[str] = None) -> Dict[str, Any]:
-    #     """List every namespace visible to *user_id*."""
-    #     resolved_user = user_id or self.user_id
-    #     if not resolved_user:
-    #         raise ValueError("user_id is required to list indexes.")
-    #     return self._client.get_namespace_details(user_id=resolved_user)
+    def list_indexes(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """List every namespace visible to *user_id*."""
+        resolved_user = user_id or self.user_id
+        if not resolved_user:
+            raise ValueError("user_id is required to list indexes.")
+        return self._client.get_namespace_details(user_id=resolved_user)
 
-    # def health(self) -> Dict[str, Any]:
-    #     """Ping the server. Returns ``{"status": "ok", ...}`` when healthy."""
-    #     return self._client.health_check(
-    #         user_id=self.user_id or "sdk-health-check",
-    #         vector_lake_description="__health__",
-    #     )
-    rjt: cr end
+    def health(self) -> Dict[str, Any]:
+        """Ping the server. Returns ``{"status": "ok", ...}`` when healthy."""
+        return self._client.health_check(
+            user_id=self.user_id or "sdk-health-check",
+            vector_lake_description="__health__",
+        )
 
     @property
     def raw(self) -> VectorLakeClient:

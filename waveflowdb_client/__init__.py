@@ -2,7 +2,7 @@
 waveflowdb_client — VectorLake Python SDK v1.5.0
 """
 
-__version__ = "1.0.6"
+__version__ = "1.5.0"
 
 from .client import VectorLakeClient
 from .config import Config

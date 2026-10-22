@@ -133,6 +133,17 @@ class Config:
         MB.  Must be >= max_batch_size_mb so _flush_pending can always form at
         least one complete batch.
 
+    streaming_max_concurrent_batches (int, default 1)
+        Streaming mode: maximum number of minibatch uploads allowed to be
+        in flight at once. ``1`` preserves the original strictly sequential
+        behaviour (one upload at a time, waiting for each response before
+        sending the next). Raising this lets extraction keep producing
+        minibatches while several are being uploaded concurrently, which can
+        meaningfully cut wall-clock time for I/O-bound uploads — at the cost
+        of a proportionally higher peak memory footprint and server-side
+        request rate. The corresponding env var is
+        VECTOR_LAKE_STREAMING_MAX_CONCURRENT_BATCHES.
+
     Quick-start examples
     ─────────────────────
     # Local OCR only (default)
@@ -190,6 +201,9 @@ class Config:
         # Parallel extraction threads for create_batches / streaming_create_batches.
         # Default 4 — good for I/O-bound OCR; set to 1 for sequential behaviour.
         extraction_workers:           Optional[int]   = None,
+        # Max minibatch uploads in flight at once in streaming mode.
+        # Default 1 — sequential uploads, one at a time (original behaviour).
+        streaming_max_concurrent_batches: Optional[int] = None,
         vector_lake_path:     Optional[str]       = None,
         log_dir:              Optional[str]       = None,
         allowed_extensions:   Optional[List[str]] = None,
@@ -316,6 +330,17 @@ class Config:
             if extraction_workers is not None
             else _env_int("VECTOR_LAKE_EXTRACTION_WORKERS", 4)
         )
+
+        self.streaming_max_concurrent_batches: int = (
+            streaming_max_concurrent_batches
+            if streaming_max_concurrent_batches is not None
+            else _env_int("VECTOR_LAKE_STREAMING_MAX_CONCURRENT_BATCHES", 1)
+        )
+        if self.streaming_max_concurrent_batches < 1:
+            raise ConfigError(
+                f"streaming_max_concurrent_batches "
+                f"({self.streaming_max_concurrent_batches}) must be >= 1."
+            )
 
         self.vector_lake_path: str  = vector_lake_path or _env_str("VECTOR_LAKE_PATH",    "upload")
         self.log_dir: str           = log_dir          or _env_str("VECTOR_LAKE_LOG_DIR", "logs")
@@ -449,6 +474,7 @@ class Config:
             f"Config(host={self.host!r}, port={self.service_port}, "
             f"batch={self.max_files_per_batch} files/{size_str}, "
             f"extraction_workers={self.extraction_workers}, "
+            f"streaming_max_concurrent_batches={self.streaming_max_concurrent_batches}, "
             f"local_ocr={self.enable_ocr}, ocr_lang={self.ocr_lang!r}, "
             f"cloud_ocr={cloud!r}, strategy={self.cloud_ocr_strategy!r})"
         )

@@ -427,6 +427,8 @@ def _run_streaming_with_recovery(
     mode: str,
     resume: bool,
     files_meta: Optional[list] = None,
+    max_concurrent_batches: Optional[int] = None,
+    batch_delay: Optional[float] = None,
 ) -> dict:
     """
     Run a streaming upload with checkpoint-based recovery.
@@ -490,6 +492,8 @@ def _run_streaming_with_recovery(
         files=all_files,
         files_meta=files_meta,
         on_batch_success=_on_batch_success,
+        max_concurrent_batches=max_concurrent_batches,
+        batch_delay=batch_delay,
     )
 
     for batch in result.get("batches", []):
@@ -526,6 +530,8 @@ def _run_upload(
     files_name: Optional[List[str]],
     files_data: Optional[List[str]],
     files_meta: Optional[List[dict]],
+    max_concurrent_batches: Optional[int] = None,
+    batch_delay: Optional[float] = None,
 ) -> dict:
     """
     Route an upload to direct mode or path mode (streaming / sequential).
@@ -582,6 +588,8 @@ def _run_upload(
         if mode == "streaming":
             result = _run_streaming_with_recovery(
                 client, sdk_op, mode, resume, files_meta,
+                max_concurrent_batches=max_concurrent_batches,
+                batch_delay=batch_delay,
             )
         else:
             start = _resolve_start_batch(sdk_op, mode, resume, start_from_batch)
@@ -623,6 +631,8 @@ def run_add(
     files_name: Optional[List[str]] = None,
     files_data: Optional[List[str]] = None,
     files_meta: Optional[List[dict]] = None,
+    max_concurrent_batches: Optional[int] = None,
+    batch_delay: Optional[float] = None,
 ) -> dict:
     """
     Index new documents.
@@ -632,11 +642,21 @@ def run_add(
     have actually changed — unchanged files reuse cached chunks.
 
     Direct mode: supply files_name + files_data to pass content in-memory.
+
+    max_concurrent_batches: (streaming mode only) maximum number of
+    minibatch uploads allowed to be in flight at once. ``None`` falls back
+    to ``Config.streaming_max_concurrent_batches``.
+    batch_delay: seconds to sleep between consecutive batch/minibatch
+    submissions. ``None`` keeps the SDK default. If you raise
+    max_concurrent_batches, consider lowering this too — it throttles
+    submissions regardless of concurrency.
     """
     return _run_upload(
         "add_docs", _client(), "ADD",
         mode, resume, start_from_batch, end_batch,
         files_name, files_data, files_meta,
+        max_concurrent_batches=max_concurrent_batches,
+        batch_delay=batch_delay,
     )
 
 
@@ -649,17 +669,27 @@ def run_refresh(
     files_name: Optional[List[str]] = None,
     files_data: Optional[List[str]] = None,
     files_meta: Optional[List[dict]] = None,
+    max_concurrent_batches: Optional[int] = None,
+    batch_delay: Optional[float] = None,
 ) -> dict:
     """
     Re-index existing documents.
 
     All on-disk chunks are purged before extraction so the server always
     receives the current version of each document, never cached content.
+
+    max_concurrent_batches: (streaming mode only) maximum number of
+    minibatch uploads allowed to be in flight at once. ``None`` falls back
+    to ``Config.streaming_max_concurrent_batches``.
+    batch_delay: seconds to sleep between consecutive batch/minibatch
+    submissions. ``None`` keeps the SDK default.
     """
     return _run_upload(
         "refresh_docs", _client(), "REFRESH",
         mode, resume, start_from_batch, end_batch,
         files_name, files_data, files_meta,
+        max_concurrent_batches=max_concurrent_batches,
+        batch_delay=batch_delay,
     )
 
 
@@ -672,6 +702,8 @@ def run_insert(
     files_name: Optional[List[str]] = None,
     files_data: Optional[List[str]] = None,
     files_meta: Optional[List[dict]] = None,
+    max_concurrent_batches: Optional[int] = None,
+    batch_delay: Optional[float] = None,
 ) -> dict:
     """
     Insert documents at a server-controlled position in the corpus.
@@ -679,11 +711,19 @@ def run_insert(
     All on-disk chunks are purged before extraction to guarantee fresh
     content is sent.  Unlike add (which always appends), insert lets the
     server control placement within the namespace.
+
+    max_concurrent_batches: (streaming mode only) maximum number of
+    minibatch uploads allowed to be in flight at once. ``None`` falls back
+    to ``Config.streaming_max_concurrent_batches``.
+    batch_delay: seconds to sleep between consecutive batch/minibatch
+    submissions. ``None`` keeps the SDK default.
     """
     return _run_upload(
         "insert_docs", _client(), "INSERT",
         mode, resume, start_from_batch, end_batch,
         files_name, files_data, files_meta,
+        max_concurrent_batches=max_concurrent_batches,
+        batch_delay=batch_delay,
     )
 
 
