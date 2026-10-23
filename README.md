@@ -86,6 +86,38 @@ index.add()
 ```
 Chunking and embedding generation are handled internally.
 
+### Upload Text Content Directly
+You can add text to your namespace without creating or uploading a document file. Paste the text content into the documents list and provide a unique document ID in the ids list.
+```python
+# Add text content directly to the namespace
+index.add(
+    documents=[
+        "Employees are entitled to 12 days of paid sick leave per year."
+    ],
+    ids=["hr_sick_leave_policy.txt"]
+)
+```
+- documents: The text content you want to store and search.
+
+- ids: A unique identifier for each text entry. Use a descriptive name, such as hr_sick_leave_policy.txt.
+
+For multiple text entries, provide a corresponding ID for each entry. Ensure both lists contain the same number of items.
+
+## Upload Documents with Metadata
+You can attach metadata to documents during upload to enhance filtering and retrieval. Provide a metadata dictionary mapped to each file name.
+```python
+index.add(
+    files=["faq.txt", "policy.txt"],
+    metadatas={
+        "faq.txt": {"department": "finance", "year": 2026},
+        "policy.txt": {"author": "alice"},
+    },
+)
+```
+Metadata can be used with VQL queries to filter documents based on attributes such as department, year, or author.
+
+For more details, refer to the [VQL Documentation](docs/VQL_DOCUMENTATION.md).
+
 ## Upload Documents with OCR
 OCR can help extract text from documents that require optical character recognition.
 
@@ -140,10 +172,10 @@ index.get()
 index.describe_index_stats()
 
 # List all namespaces available to your account
-index.list_indexes()
+client.list_indexes()
 
 # Check server health
-index.health()
+client.health()
 ```
 
 ## Documentation
