@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 try:
-    import fitz  # PyMuPDF
+    import pdfspine.fitz as fitz # PyMuPDF alt
 except ImportError:
     fitz = None
 

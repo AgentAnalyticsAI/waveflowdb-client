@@ -23,6 +23,18 @@ pip install waveflowdb-client
 # Optional: Install additional document processing support
 pip install waveflowdb-client[documents]
 ```
+## Setup Before You Begin
+
+Before using the WaveflowDB Client, complete the following steps:
+
+1. **Access WaveflowDB:** Visit the [WaveflowDB UI](https://db.agentanalytics.ai/).
+2. **Generate an API key:** Create your API credentials from the UI.
+3. **Create a namespace:** Create a namespace that will store your documents and their embeddings.
+4. **Configure your credentials:** Keep your API key and registered email address ready for client initialization.
+
+For detailed instructions, refer to the [WaveflowDB Setup Guide](https://www.agentanalytics.ai/docs/waveflow-db).
+
+**Note:** You must have a valid API key and an existing namespace before running the Quick Start example. Replace the placeholder credentials and namespace name in the example with your own values.
 
 ## Quick start
 ```python
@@ -46,7 +58,6 @@ index.add(files=["faq.txt", "policy.txt"])
 results = index.query("refund policy", top_k=5)
 print(results)
 ```
-Generate your API key and create a namespace in the [WaveflowDB UI](https://db.agentanalytics.ai/) by following the [Setup Guide]([docs/SETUP_GUIDE.md](https://www.agentanalytics.ai/docs/waveflow-db))
 
 ## Search and Retrieval
 ### Basic Search 
