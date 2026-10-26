@@ -1,0 +1,105 @@
+name: Release to PyPI
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Tag commit must be on main
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main \
+            || { echo "::error::Tag is not on main"; exit 1; }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Tag must match pyproject version
+        run: |
+          python - <<'EOF'
+          import os, tomllib
+          tag = os.environ["GITHUB_REF_NAME"].lstrip("v")
+          with open("pyproject.toml", "rb") as f:
+              version = tomllib.load(f)["project"]["version"]
+          if tag != version:
+              raise SystemExit(f"Tag {tag} != pyproject version {version}")
+          print("Version OK:", version)
+          EOF
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          twine check --strict dist/*
+
+      - name: Verify package contents
+        run: |
+          python - <<'EOF'
+          import glob, zipfile
+          banned = ("tests/", "docs/", "examples/")
+          for whl in glob.glob("dist/*.whl"):
+              names = zipfile.ZipFile(whl).namelist()
+              bad = [n for n in names if n.startswith(banned)]
+              if bad:
+                  raise SystemExit(f"Unexpected files in wheel: {bad}")
+              print("\n".join(names))
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi            
+      url: https://pypi.org/project/waveflowdb-client/
+    permissions:
+      id-token: write       
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
