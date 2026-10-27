@@ -10,6 +10,16 @@ A Python client library for [WaveflowDB](https://db.agentanalytics.ai/)
 
 </div>
 
+## Key Features
+
+- **Document ingestion:** Upload files or add text directly.
+- **Semantic search:** Retrieve relevant content using natural-language queries.
+- **VQL:** Perform targeted retrieval with structured filtering.
+- **Document management:** Add, update, refresh, insert, and delete documents.
+- **Custom metadata:** Attach application-specific attributes to documents.
+- **Document processing:** Support for multiple file formats and optional OCR integrations.
+- **Reliable ingestion:** Batch processing, resumable uploads, and change detection.
+
 ## How to Use WaveflowDB
 
 1. Create a namespace in the [WaveflowDB UI](https://db.agentanalytics.ai/) and configure your API credentials.
@@ -28,13 +38,12 @@ pip install waveflowdb-client[documents]
 Before using the WaveflowDB Client, complete the following steps:
 
 1. **Access WaveflowDB:** Visit the [WaveflowDB UI](https://db.agentanalytics.ai/).
-2. **Generate an API key:** Create your API credentials from the UI.
-3. **Create a namespace:** Create a namespace that will store your documents and their embeddings.
-4. **Configure your credentials:** Keep your API key and registered email address ready for client initialization.
+2. **Generate an API key:** Create your API credentials.
+3. **Create a namespace:** Set up a namespace to store your documents and embeddings.
 
 For detailed instructions, refer to the [WaveflowDB Setup Guide](https://www.agentanalytics.ai/docs/waveflow-db).
 
-**Note:** You must have a valid API key and an existing namespace before running the Quick Start example. Replace the placeholder credentials and namespace name in the example with your own values.
+**Note:** Keep your API key, registered email address, and namespace name ready before running the Quick Start example.
 
 ## Quick start
 ```python
@@ -182,16 +191,34 @@ index.get()
 # View statistics and metadata for the current namespace
 index.describe_index_stats()
 
-# List all namespaces available to your account
-client.list_indexes()
-
 # Check server health
 client.health()
 ```
 
+## Core Operations
+
+| Operation | Purpose | Guide |
+|---|---|---|
+| Add documents | Upload files or add text content | [Document Management](docs/document-management.md) |
+| Update / refresh | Reprocess existing documents | [Document Management](docs/document-management.md) |
+| Insert documents | Insert documents at a controlled position, where supported | [Document Management](docs/document-management.md) |
+| Search | Retrieve relevant document chunks | [Search and Retrieval](docs/search-and-retrieval.md) |
+| Delete | Remove indexed documents | [Document Management](docs/document-management.md) |
+| Metadata | Attach custom fields for filtering | [Metadata](docs/metadata.md) |
+
 ## Documentation
 
-For detailed documentation, API references, and usage examples, visit the [Official WaveflowDB Documentation](https://www.agentanalytics.ai/docs/waveflow-db).
+- [Getting Started](docs/getting-started.md)
+- [Configuration and Optional Dependencies](docs/configuration.md)
+- [Document Management](docs/document-management.md)
+- [Search and Retrieval](docs/search-and-retrieval.md)
+- [VQL Documentation](docs/VQL_DOCUMENTATION.md)
+- [Metadata](docs/metadata.md)
+- [Document Processing and OCR](docs/document-processing.md)
+- [Advanced Ingestion](docs/advanced-ingestion.md)
+- [Troubleshooting](docs/troubleshooting.md)
+
+For platform documentation, visit the [WaveflowDB Documentation](https://www.agentanalytics.ai/docs/waveflow-db).
 
 ## Support & Feedback
 
