@@ -85,7 +85,7 @@ results = index.query(query)
 
 In this example, `userId` is a metadata field and `ts09ab1234` is the value being matched. Replace them with fields and values that exist in your namespace.
 
-Metadata filtering depends on how metadata was supplied during ingestion and how the backend implements filter matching. Refer to [Metadata](metadata.md) for more information.
+Metadata filtering depends on how metadata was supplied during ingestion and how the backend implements filter matching.
 
 ## Search Modes
 
