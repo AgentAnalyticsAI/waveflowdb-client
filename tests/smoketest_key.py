@@ -7,6 +7,7 @@ run:
     python -m tests.smoke_test
 """
 
+import json
 import os
 from waveflowdb_client import VectorLake
 import atexit
@@ -15,9 +16,9 @@ import shutil
 # Configuration
 API_KEY = os.getenv("WAVEFLOWDB_API_KEY", "your-api-key")
 USER_ID = os.getenv("WAVEFLOWDB_USER_ID", "your-email-address")
-HOST = "https://waveflow-analytics.com"
+HOST = os.getenv("WAVEFLOWDB_HOST", "https://waveflow-analytics.com")
 VECTOR_LAKE_PATH = "./tests/upload"
-NAMESPACE = "test_namespace"
+NAMESPACE = os.getenv("NAMESPACE", "test_namespace")
 
 def cleanup():
     """Remove test files and logs when the script exits."""
@@ -59,6 +60,7 @@ def check_status(name, operation):
     """Check whether the operation returns HTTP 200."""
     try:
         response = operation()
+        print(json.dumps(response, indent=2, default=str)) #uncomment see the responses
         status_code = (
             response.get("status_code")
             if isinstance(response, dict)
@@ -88,6 +90,7 @@ def main():
     client, index = init_client()
 
     tests = [
+        ("0. Health check", lambda: client.health()),
         ("1. Upload documents", lambda: index.add(
             files=["faq.txt", "policy.txt"]
         )),
@@ -97,7 +100,7 @@ def main():
         ("3. Get documents", lambda: index.get()),
         ("4. Index statistics", lambda: index.describe_index_stats()),
         ("5. List namespaces", lambda: client.list_indexes(namespace=NAMESPACE)),
-        ("6. Health check", lambda: client.health()),
+        ("6. Delete by ID", lambda: index.delete(ids=["faq_part1","policy_part1"])),
     ]
 
     passed = 0
