@@ -2,21 +2,18 @@
 
 WaveflowDB can process supported document formats into content suitable for indexing and retrieval. Processing may include text extraction, structured-data parsing, chunking, and optical character recognition (OCR) for scanned documents and images.
 
-Available formats and processing capabilities depend on the installed SDK version and its optional dependencies.
-
 ## Supported File Types
 
 The following table summarizes the supported formats and their intended processing approaches. Verify availability against your installed release.
 
 | File types | Processing approach |
 |---|---|
-| `.txt`, `.py` | Extract text and split content into chunks. |
-| `.ipynb` | Extract code cells and process their content. |
+| `.txt` | Extract text and split content into chunks. |
 | `.pdf` | Extract text and optionally apply OCR to images. |
 | `.docx` | Extract text and inline images, with optional OCR. |
 | `.csv` | Split records while preserving column headers. |
 | `.xlsx` | Convert workbook content into a structured, CSV-like representation. |
-| `.jsonl`, `.ndjson` | Process individual records and validate JSON lines. |
+| `.jsonl` | Process individual records and validate JSON lines. |
 | `.json` | Process structured JSON content; atomic handling may depend on the implementation. |
 | `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.webp` | Extract text from images using OCR. |
 

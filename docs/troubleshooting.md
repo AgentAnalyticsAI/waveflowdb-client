@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Use this guide to diagnose common WaveflowDB client errors. Error messages and retry behavior may vary by SDK version and API layer.
+Use this guide to diagnose common WaveflowDB client errors. 
 
 ## Authentication or Authorization Errors
 
@@ -30,7 +30,7 @@ If a file upload fails:
 
 - Confirm that `vector_lake_path` points to the expected directory.
 - Verify that the files passed to `index.add(files=[...])` exist in the configured directory.
-- Check whether the file extension is supported in [Document Processing and OCR](document-processing-and-ocr.md).
+- Check whether the file extension is supported in [Document Processing and OCR](document-processing.md).
 - Check whether filename sanitization or other preprocessing has changed the expected filename.
 
 ## Missing or Incomplete Extracted Text
@@ -43,7 +43,7 @@ For PDFs and image-heavy documents:
 - For cloud OCR, verify the provider credentials, permissions, region, and API access.
 - Inspect the logs for document extraction or OCR failures.
 
-See [Document Processing and OCR](document-processing-and-ocr.md) for configuration details.
+See [Document Processing and OCR](document-processing.md) for configuration details.
 
 ## Upload Interrupted or Partially Failed
 
