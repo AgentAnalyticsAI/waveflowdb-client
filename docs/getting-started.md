@@ -51,7 +51,7 @@ index = client.Index("support_docs")
 index.add(files=["faq.txt", "policy.txt"])
 ```
 
-Use the host URL configured for your WaveflowDB deployment. The example host above is the one used in the supplied SDK README; confirm it with your administrator if your environment differs.
+Use the host URL configured for your WaveflowDB deployment. 
 
 ## 5. Search
 
@@ -60,7 +60,6 @@ results = index.query("What is the refund policy?", top_k=5)
 print(results)
 ```
 
-The result format depends on the SDK version and backend response. Inspect the returned value in your environment before relying on particular fields.
 
 ## Next steps
 

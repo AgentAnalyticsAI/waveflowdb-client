@@ -1,74 +1,96 @@
 # Search and Retrieval
 
-The `Index` interface provides methods to search documents within a namespace. You can perform semantic searches using natural-language queries or use Vector Query Language (VQL) to apply more specific search constraints.
+| Method | Use it for |
+|---|---|
+| `index.query()` | Semantic search; optional hybrid keyword filtering and VQL |
+| `index.keyword_search()` | Exact keyword search across the whole index |
 
-## Basic Semantic Search
-
-Use `index.query()` to retrieve documents relevant to a natural-language query.
+## Semantic Search
 
 ```python
 results = index.query("refund policy", top_k=5)
-print(results)
 ```
 
-- `query`: The natural-language text describing what you want to find.
-- `top_k`: The maximum number of results requested.
+| Parameter | Default | Description |
+|---|---|---|
+| `query_text` | required | Natural-language query, or a raw VQL string |
+| `top_k` | `10` | Maximum number of results |
+| `threshold` | `0.2` | Minimum similarity score |
+| `include_data` | `True` | `True` returns chunk text with each match; `False` returns document metadata only |
+| `filter` | `False` | Enables hybrid keyword + vector filtering |
+| `filters` | `None` | Keywords for the hybrid filter (used with `filter=True`) |
+| `search_type` | `None` | `"flat"` or `"flat_filter"` (only with `filter=True`) |
+| `documents`, `ids` | `None` | Search inline text instead of the index (both required) |
 
-The returned results may contain document content, identifiers, metadata, scores, or other fields, depending on the SDK and backend configuration. Inspect the response structure before accessing individual fields.
+```python
+index.query("refund policy", top_k=5, threshold=0.3)       # raise the score cutoff
+index.query("refund policy", include_data=False)           # metadata only
+```
 
-## VQL (Vector Query Language)
+## Hybrid Filtering
 
-VQL combines natural-language search with brace-based terms and optional structured filtering to narrow retrieval results.
+Narrow results with keywords. `filters` are combined with `or`.
+
+```python
+index.query("refund policy", filter=True, filters=["billing", "payments"])
+```
+
+This sends: `select top 5 where query is "refund policy" contains {billing or payments}`
+
+**`search_type`** (only valid with `filter=True`; defaults to `"flat_filter"`):
+
+| Value | Behaviour |
+|---|---|
+| `"flat_filter"` | Applies the filter first, then ranks only the matching documents. Fewer, more targeted results. |
+| `"flat"` | Ranks the whole corpus. The filter only nudges scores and never excludes a document. |
+
+```python
+index.query("refund policy", filter=True, filters=["billing"], search_type="flat")
+```
+
+> The filter takes effect only when the query contains a `contains {...}` clause. Without it, the server silently runs plain semantic search, even with `filter=True`. Use `filters=[...]` and the SDK builds the clause for you.
+
+## VQL
+
+Write the full query yourself for `FROM` clauses, structured fields or multiple conditions.
 
 ```python
 query = '''SELECT TOP 5
 WHERE QUERY IS "refund policy complaints"
 CONTAINS {userId:ts09ab1234}'''
 
-results = index.query(query)
-print(results)
+index.query(query, filter=True)
 ```
 
-In this example, the query searches for refund policy complaints and includes a constraint on the `userId` field.
+- A query starting with `select` is sent as-is.
+- Leave `filters` unset. If you set it, it is ignored and a warning is logged.
+- `top_k` does not change the `TOP N` written in the VQL.
 
-Use VQL when you need more control over retrieval than a plain semantic query provides.
+See [VQL Documentation](VQL_DOCUMENTATION.md) for syntax, structured-data filtering and tokenization.
 
-For syntax, examples, structured-data filtering, and search behavior, see [VQL Documentation](VQL_DOCUMENTATION.md).
+## Keyword Search
 
-## Search Modes and Hybrid Filtering
+Full-text, non-semantic search over the whole index. **Wrap the keyword in curly braces.**
 
-Depending on the backend configuration, search operations may support different strategies for combining semantic retrieval with filtering.
+```python
+index.keyword_search("{refund}", top_k=5)
+```
 
-- **`flat`** — Runs semantic search and hybrid filtering independently, then combines their results. This approach is intended to improve recall by considering results from both retrieval paths.
-- **`flat_filter`** — Applies hybrid filtering as a constraint before semantic ranking, limiting ranking to eligible candidates.
+## Search Inline Text
 
-The low-level API may expose these options through `search_type` and `hybrid_filter`. When using these parameters, check the API signature and confirm whether hybrid filtering must be enabled explicitly.
+Search text you supply instead of the stored index. Nothing is indexed.
 
-Search-mode availability and behavior may vary between the high-level `Index` interface and the low-level client.
+```python
+index.query(
+    "refund policy",
+    documents=["Refunds are accepted within 30 days.", "Shipping takes 5 days."],
+    ids=["a.txt", "b.txt"],
+)
+```
 
-## Low-Level Search
+## Tips
 
-For more advanced retrieval workflows, the low-level API may expose `get_matching_docs()` with parameters such as:
-
-| Parameter | Purpose |
-|---|---|
-| `query` | Search query text. |
-| `user_id` | User identifier associated with the request. |
-| `vector_lake_description` | Description of the vector lake or indexed content. |
-| `pattern` | Search pattern or filtering expression. |
-| `hybrid_filter` | Controls hybrid filtering when supported. |
-| `search_type` | Selects the retrieval strategy when supported. |
-| `top_docs` | Controls the requested number of documents. |
-| `threshold` | Sets a retrieval threshold when supported. |
-| `with_data` | Controls whether document data is included in the response. |
-| Inline files | Optional file inputs, if supported by the method. |
-
-
-## Search Tips
-
-- Start with a clear natural-language query for general semantic retrieval.
-- Use VQL when specific terms or structured attributes should narrow the results.
-- Use meaningful field names and values when filtering structured documents.
-- Compare broad and targeted queries against representative documents.
-- Test different search modes when supported to determine which works best for your use case.
-- Review [VQL Documentation](VQL_DOCUMENTATION.md) for tokenization, normalization, and short-token considerations.
+- Start with a plain semantic query, then add `filters` to narrow it.
+- Use `flat_filter` for precision and `flat` when you don't want to risk excluding relevant documents.
+- If results are empty, lower `threshold` or try `include_data=True`.
+- Inspect the response before reading fields; its structure depends on `include_data`.

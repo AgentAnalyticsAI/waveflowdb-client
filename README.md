@@ -123,21 +123,6 @@ index.add(
 
 For multiple text entries, provide a corresponding ID for each entry. Ensure both lists contain the same number of items.
 
-## Upload Documents with Metadata
-You can attach metadata to documents during upload to enhance filtering and retrieval. Provide a metadata dictionary mapped to each file name.
-```python
-index.add(
-    files=["faq.txt", "policy.txt"],
-    metadatas={
-        "faq.txt": {"department": "finance", "year": 2026},
-        "policy.txt": {"author": "alice"},
-    },
-)
-```
-Metadata can be used with VQL queries to filter documents based on attributes such as department, year, or author.
-
-For more details, refer to the [VQL Documentation](docs/VQL_DOCUMENTATION.md).
-
 ## Upload Documents with OCR
 OCR can help extract text from documents that require optical character recognition.
 
@@ -168,14 +153,16 @@ index.add(files=["faq.pdf", "policy.docx"])
 Cloud OCR may also require provider-specific credentials and configuration. See the setup documentation for details.
 
 ## Delete Documents
-Documents are stored as chunks, each with its own ID. Use the chunk IDs to delete specific chunks.
-```python
-# Delete the first and third chunks of faq.pdf
-index.delete(ids=["faq_part1.pdf", "faq_part3.pdf"])
-```
-Chunk ID format: {file_name}_part{chunk_number}.{file_extension}
 
-For example, hr_policy_part4.pdf identifies the fourth chunk of hr_policy.pdf.
+Use `index.get()` to list documents in the current namespace and identify their chunk IDs. Documents are split into chunks with IDs in the format `{file_name}_part{chunk_number}`.
+
+```python
+# List documents in the current namespace
+index.get()
+
+# Delete specific chunks of faq.pdf
+index.delete(ids=["faq_part1", "faq_part2"])
+```
 
 To delete an entire document, provide the IDs of all its chunks.
 
@@ -191,6 +178,9 @@ index.get()
 # View statistics and metadata for the current namespace
 index.describe_index_stats()
 
+# List all namespaces available to your account
+client.list_indexes()
+
 # Check server health
 client.health()
 ```
@@ -204,7 +194,6 @@ client.health()
 | Insert documents | Insert documents at a controlled position, where supported | [Document Management](docs/document-management.md) |
 | Search | Retrieve relevant document chunks | [Search and Retrieval](docs/search-and-retrieval.md) |
 | Delete | Remove indexed documents | [Document Management](docs/document-management.md) |
-| Metadata | Attach custom fields for filtering | [Metadata](docs/metadata.md) |
 
 ## Documentation
 
@@ -213,7 +202,6 @@ client.health()
 - [Document Management](docs/document-management.md)
 - [Search and Retrieval](docs/search-and-retrieval.md)
 - [VQL Documentation](docs/VQL_DOCUMENTATION.md)
-- [Metadata](docs/metadata.md)
 - [Document Processing and OCR](docs/document-processing.md)
 - [Advanced Ingestion](docs/advanced-ingestion.md)
 - [Troubleshooting](docs/troubleshooting.md)
