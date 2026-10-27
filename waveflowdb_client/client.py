@@ -18,9 +18,14 @@ Processing modes
     MB) have been extracted.  For large collections with expensive OCR this
     can cut wall-clock time significantly.  Note that streaming does **not**
     support resume — use sequential mode when checkpoint/resume is needed.
+    By default minibatches are still uploaded one at a time; set
+    ``Config.streaming_max_concurrent_batches`` (or pass
+    ``max_concurrent_batches=`` to an upload method) to allow several
+    minibatch uploads to be in flight at once.
 """
 from __future__ import annotations
 
+import concurrent.futures
 import glob as _glob
 import hashlib
 import json
@@ -912,6 +917,7 @@ class VectorLakeClient:
         files_meta: FilesMetaArg = None,
         on_batch_success=None,
         resume: bool = False,
+        max_concurrent_batches: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Upload files using the streaming pipeline: extract one file at a time
@@ -965,6 +971,18 @@ class VectorLakeClient:
             and it picks up from the last minibatch that finished, without
             needing to know any batch number (there isn't a stable one in
             streaming mode).
+        max_concurrent_batches:
+            Maximum number of minibatch uploads allowed to be in flight at
+            once. ``None`` (default) falls back to
+            ``Config.streaming_max_concurrent_batches`` (itself ``1`` unless
+            configured — strictly one upload at a time, matching the
+            original behaviour). Values > 1 let minibatches keep extracting
+            and uploading while earlier ones are still awaiting a response,
+            which overlaps network latency across batches at the cost of a
+            proportionally higher peak memory footprint and request rate.
+            ``batch_delay`` still applies as a throttle between successive
+            *submissions*, independent of how many are concurrently in
+            flight.
 
         Returns
         -------
@@ -1018,13 +1036,20 @@ class VectorLakeClient:
             else "disabled"
         )
         _workers = getattr(self.config, "extraction_workers", 4)
+        _max_concurrent = (
+            max_concurrent_batches
+            if max_concurrent_batches is not None
+            else getattr(self.config, "streaming_max_concurrent_batches", 1)
+        )
+        if _max_concurrent < 1:
+            _max_concurrent = 1
         _smb = self._batch_manager.streaming_minibatch_bytes
         _smb_str = f"{_smb // 1024} KB" if _smb < 1024 * 1024 else f"{_smb // (1024*1024)} MB"
         logger.info(
-            "%s [streaming] | files=%d minibatch=%d chunks/%s ocr=%s cloud=%s workers=%d",
+            "%s [streaming] | files=%d minibatch=%d chunks/%s ocr=%s cloud=%s workers=%d concurrency=%d",
             operation.upper(), len(files),
             self._batch_manager.streaming_minibatch_files, _smb_str,
-            self.config.enable_ocr, cloud_label, _workers,
+            self.config.enable_ocr, cloud_label, _workers, _max_concurrent,
         )
 
         # Progress is tracked by *distinct source file* completed, not by raw
@@ -1038,27 +1063,148 @@ class VectorLakeClient:
         # needs to be revised.
         _files_progressed: set = set()
 
+        def _finish_batch(fut: "concurrent.futures.Future", meta: Dict[str, Any]) -> None:
+            """
+            Process the outcome of one completed minibatch upload.
+
+            Only ever called from the main thread — via the ``wait()`` /
+            ``as_completed()`` loops below — even though the request itself
+            ran on a worker thread, so ``ok_count``/``fail_count``/
+            ``batch_outputs``/the checkpoint file/the progress bar are never
+            touched concurrently and need no extra locking.
+            """
+            nonlocal ok_count, fail_count
+            batch_n      = meta["batch_num"]
+            batch        = meta["batch"]
+            t0           = meta["t0"]
+            stems_str    = meta["stems_str"]
+            chunks_str   = meta["chunks_str"]
+            source_stems = meta["source_stems"]
+
+            try:
+                result     = fut.result()
+                elapsed_ms = round((time.time() - meta["t_req"]) * 1000, 1)
+                elapsed    = round(time.time() - t0, 2)
+
+                succeeded = not bool(result.get("error"))
+
+                if succeeded:
+                    ok_count += 1
+                    status = "✓"
+                    completed_source_files.update(source_stems)
+                    _write_checkpoint(
+                        chunks_dir_path, operation, vector_lake_description,
+                        completed_source_files, ok_count, fail_count,
+                        _total_files_for_checkpoint,
+                    )
+                    if on_batch_success is not None:
+                        on_batch_success(batch)
+                else:
+                    fail_count += 1
+                    status = "✗"
+                    logger.warning(
+                        "Batch #%d FAILED  sources=[%s]  chunks=[%s]  error=%s: %s",
+                        batch_n,
+                        stems_str, chunks_str,
+                        result.get("error", "UnknownError"),
+                        result.get("message", ""),
+                    )
+
+                logger.info(
+                    "Batch #%d  %s  %.1fms  ok=%d fail=%d  sources=[%s]  chunks=[%s]",
+                    batch_n, status, elapsed_ms, ok_count, fail_count,
+                    stems_str, chunks_str,
+                )
+                batch_outputs.append({
+                    "batch_number":    batch_n,
+                    "files":           batch,
+                    "success":         succeeded,
+                    "server_skip":     bool(result.get("server_skip")),
+                    "processing_time": elapsed,
+                    "elapsed_ms":      elapsed_ms,
+                    "response":        result,
+                })
+                bar.set_postfix_str(
+                    f"{status} {elapsed_ms:.0f}ms  ok={ok_count} fail={fail_count}"
+                )
+
+            except VectorLakeError as exc:
+                elapsed = round(time.time() - t0, 2)
+                fail_count += 1
+                logger.error("Stream #%d error: %s", batch_n, exc)
+                batch_outputs.append({
+                    "batch_number":    batch_n,
+                    "files":           batch,
+                    "success":         False,
+                    "processing_time": elapsed,
+                    "elapsed_ms":      round(elapsed * 1000, 1),
+                    "response":        None,
+                    "error":           exc.to_response(),
+                })
+                bar.set_postfix_str(f"✗ VectorLakeError  fail={fail_count}")
+
+            except Exception as exc:
+                elapsed = round(time.time() - t0, 2)
+                fail_count += 1
+                logger.exception("Stream #%d unexpected error", batch_n)
+                batch_outputs.append({
+                    "batch_number":    batch_n,
+                    "files":           batch,
+                    "success":         False,
+                    "processing_time": elapsed,
+                    "elapsed_ms":      round(elapsed * 1000, 1),
+                    "response":        None,
+                    "error":           {"error": type(exc).__name__, "message": str(exc)},
+                })
+                bar.set_postfix_str(f"✗ {type(exc).__name__}  fail={fail_count}")
+
+            finally:
+                # Advance the bar by whichever of this batch's source
+                # files we haven't already counted. A file's chunks can
+                # be spread across several batches, so only count each
+                # stem the first time it's seen — otherwise a 30-chunk
+                # file would advance the bar 30 times over.
+                _new = [s for s in source_stems if s not in _files_progressed]
+                if _new:
+                    _files_progressed.update(_new)
+                    bar.update(len(_new))
+
         with _progress_bar(
             total=len(files),
             desc=f"{operation}[stream]",
             unit="file",
-        ) as bar:
+        ) as bar, concurrent.futures.ThreadPoolExecutor(
+            max_workers=_max_concurrent, thread_name_prefix="vl-stream-upload",
+        ) as executor:
+            in_flight: Dict[concurrent.futures.Future, Dict[str, Any]] = {}
+
             for batch, chunks_dir in self._batch_manager.streaming_create_batches(
                 files, base_path, extraction_workers=_workers,
             ):
-                # Sleep *between* batches only
+                # Sleep *between* submissions only — throttles how fast new
+                # minibatches are dispatched, independent of how many are
+                # concurrently in flight (that's capped by _max_concurrent
+                # below). With the default _max_concurrent=1 this reproduces
+                # the original strictly-sequential timing exactly, since the
+                # in-flight cap forces each batch to finish before the next
+                # one is even submitted.
                 if batch_num > 0:
                     time.sleep(batch_delay)
                 batch_num += 1
                 t0 = time.time()
 
                 # Computed up front (depends only on `batch`, not on the
-                # request outcome) so it's available even if an exception is
-                # raised before a result comes back.
+                # request outcome) so it's available even if prep fails
+                # before a request is ever sent.
                 chunks_str   = ", ".join(batch)
                 source_stems = sorted({f.split("_part")[0] for f in batch})
                 stems_str    = ", ".join(source_stems)
 
+                # Preparation (chunk regeneration, disk reads, file_offset
+                # bookkeeping) stays on the main thread and in generator
+                # order: file_offset indexes into a positional files_meta
+                # list, so it must be assigned in the order batches are
+                # *produced*, not the order their uploads happen to finish.
                 try:
                     # refresh_docs must regenerate chunks before re-uploading
                     if operation == "refresh_docs":
@@ -1078,58 +1224,10 @@ class VectorLakeClient:
                         "files_meta":               files_meta_batch,
                         "intelligent_segmentation": intelligent_segmentation,
                     }
-
-                    t_req      = time.time()
-                    result     = self._make_request(endpoint, payload, operation, batch_num)
-                    elapsed_ms = round((time.time() - t_req) * 1000, 1)
-                    elapsed    = round(time.time() - t0, 2)
-
-                    succeeded = not bool(result.get("error"))
-
-                    if succeeded:
-                        ok_count += 1
-                        status = "✓"
-                        completed_source_files.update(source_stems)
-                        _write_checkpoint(
-                            chunks_dir_path, operation, vector_lake_description,
-                            completed_source_files, ok_count, fail_count,
-                            _total_files_for_checkpoint,
-                        )
-                        if on_batch_success is not None:
-                            on_batch_success(batch)
-                    else:
-                        fail_count += 1
-                        status = "✗"
-                        logger.warning(
-                            "Batch #%d FAILED  sources=[%s]  chunks=[%s]  error=%s: %s",
-                            batch_num,
-                            stems_str, chunks_str,
-                            result.get("error", "UnknownError"),
-                            result.get("message", ""),
-                        )
-
-                    logger.info(
-                        "Batch #%d  %s  %.1fms  ok=%d fail=%d  sources=[%s]  chunks=[%s]",
-                        batch_num, status, elapsed_ms, ok_count, fail_count,
-                        stems_str, chunks_str,
-                    )
-                    batch_outputs.append({
-                        "batch_number":    batch_num,
-                        "files":           batch,
-                        "success":         succeeded,
-                        "server_skip":     bool(result.get("server_skip")),
-                        "processing_time": elapsed,
-                        "elapsed_ms":      elapsed_ms,
-                        "response":        result,
-                    })
-                    bar.set_postfix_str(
-                        f"{status} {elapsed_ms:.0f}ms  ok={ok_count} fail={fail_count}"
-                    )
-
                 except VectorLakeError as exc:
-                    elapsed = round(time.time() - t0, 2)
                     fail_count += 1
-                    logger.error("Stream #%d error: %s", batch_num, exc)
+                    logger.error("Stream #%d prep error: %s", batch_num, exc)
+                    elapsed = round(time.time() - t0, 2)
                     batch_outputs.append({
                         "batch_number":    batch_num,
                         "files":           batch,
@@ -1140,11 +1238,15 @@ class VectorLakeClient:
                         "error":           exc.to_response(),
                     })
                     bar.set_postfix_str(f"✗ VectorLakeError  fail={fail_count}")
-
+                    _new = [s for s in source_stems if s not in _files_progressed]
+                    if _new:
+                        _files_progressed.update(_new)
+                        bar.update(len(_new))
+                    continue
                 except Exception as exc:
-                    elapsed = round(time.time() - t0, 2)
                     fail_count += 1
-                    logger.exception("Stream #%d unexpected error", batch_num)
+                    logger.exception("Stream #%d prep unexpected error", batch_num)
+                    elapsed = round(time.time() - t0, 2)
                     batch_outputs.append({
                         "batch_number":    batch_num,
                         "files":           batch,
@@ -1155,17 +1257,37 @@ class VectorLakeClient:
                         "error":           {"error": type(exc).__name__, "message": str(exc)},
                     })
                     bar.set_postfix_str(f"✗ {type(exc).__name__}  fail={fail_count}")
-
-                finally:
-                    # Advance the bar by whichever of this batch's source
-                    # files we haven't already counted. A file's chunks can
-                    # be spread across several batches, so only count each
-                    # stem the first time it's seen — otherwise a 30-chunk
-                    # file would advance the bar 30 times over.
                     _new = [s for s in source_stems if s not in _files_progressed]
                     if _new:
                         _files_progressed.update(_new)
                         bar.update(len(_new))
+                    continue
+
+                t_req  = time.time()
+                future = executor.submit(self._make_request, endpoint, payload, operation, batch_num)
+                in_flight[future] = {
+                    "batch_num":    batch_num,
+                    "batch":        batch,
+                    "t0":           t0,
+                    "t_req":        t_req,
+                    "stems_str":    stems_str,
+                    "chunks_str":   chunks_str,
+                    "source_stems": source_stems,
+                }
+
+                # Cap the number of uploads in flight at _max_concurrent —
+                # block for at least one to finish before submitting more.
+                while len(in_flight) >= _max_concurrent:
+                    done, _ = concurrent.futures.wait(
+                        in_flight.keys(), return_when=concurrent.futures.FIRST_COMPLETED,
+                    )
+                    for f in done:
+                        _finish_batch(f, in_flight.pop(f))
+
+            # Extraction is exhausted — drain whatever uploads are still
+            # in flight before finishing the run.
+            for f in concurrent.futures.as_completed(list(in_flight.keys())):
+                _finish_batch(f, in_flight.pop(f))
 
         # Files whose extraction failed outright (e.g. OCR skipped/empty —
         # see the "Skipping '<file>'" log lines) never produce a single chunk,
@@ -1498,6 +1620,8 @@ class VectorLakeClient:
         grand_total: Optional[int] = None,
         on_batch_success=None,
         resume: bool = False,
+        max_concurrent_batches: Optional[int] = None,
+        batch_delay: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Route a path-based upload to the correct processing implementation.
@@ -1518,14 +1642,32 @@ class VectorLakeClient:
             Forwarded to whichever processing implementation runs. Skips
             source files already recorded as completed in the operation/lake
             checkpoint — works the same way in both modes.
+        max_concurrent_batches:
+            (``"streaming"`` only) Maximum number of minibatch uploads in
+            flight at once. ``None`` falls back to
+            ``Config.streaming_max_concurrent_batches``. Ignored in
+            ``"sequential"`` mode.
+        batch_delay:
+            Seconds to sleep between consecutive batch/minibatch
+            *submissions*. ``None`` keeps each implementation's own default
+            (1.0s sequential, 0.5s streaming). Worth lowering explicitly when
+            raising ``max_concurrent_batches`` above 1 — the submission
+            delay applies regardless of concurrency, so a delay larger than
+            actual request latency will throttle submissions before
+            concurrency ever has a chance to help.
         """
         if processing_mode == "streaming":
+            streaming_kwargs: Dict[str, Any] = {}
+            if batch_delay is not None:
+                streaming_kwargs["batch_delay"] = batch_delay
             return self._process_files_streaming(
                 operation, user_id, vector_lake_description,
                 intelligent_segmentation, session_id, files,
                 files_meta=files_meta,
                 on_batch_success=on_batch_success,
                 resume=resume,
+                max_concurrent_batches=max_concurrent_batches,
+                **streaming_kwargs,
             )
 
         if processing_mode not in ("sequential", "streaming"):
@@ -1538,6 +1680,9 @@ class VectorLakeClient:
         if grand_total is None:
             grand_total = self._compute_grand_total(self.config.vector_lake_path)
 
+        sequential_kwargs: Dict[str, Any] = {}
+        if batch_delay is not None:
+            sequential_kwargs["batch_delay"] = batch_delay
         return self._process_files_in_batches(
             operation, user_id, vector_lake_description,
             start_from_batch, end_batch,
@@ -1545,6 +1690,7 @@ class VectorLakeClient:
             grand_total_batches=grand_total,
             files_meta=files_meta,
             resume=resume,
+            **sequential_kwargs,
         )
 
     # ── Public: upload ────────────────────────────────────────────────────────
@@ -1564,6 +1710,8 @@ class VectorLakeClient:
         processing_mode: ProcessingMode = "sequential",
         on_batch_success=None,
         resume: bool = False,
+        max_concurrent_batches: Optional[int] = None,
+        batch_delay: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Add **new** documents to the index.
@@ -1647,6 +1795,19 @@ class VectorLakeClient:
             and ``resume=True``; it picks up automatically from the last
             completed batch, no batch number needed. Works the same way for
             ``"sequential"`` and ``"streaming"``.
+        max_concurrent_batches:
+            (Path mode, ``"streaming"`` only) Maximum number of minibatch
+            uploads allowed to be in flight at once. ``None`` (default) falls
+            back to ``Config.streaming_max_concurrent_batches`` (``1`` unless
+            configured, i.e. one upload at a time). Ignored in
+            ``"sequential"`` mode and in direct mode.
+        batch_delay:
+            (Path mode) Seconds to sleep between consecutive batch/minibatch
+            *submissions*. ``None`` keeps the default (1.0s sequential, 0.5s
+            streaming). If you raise *max_concurrent_batches*, consider
+            lowering this too — it throttles submissions regardless of
+            concurrency, so a delay larger than actual request latency can
+            prevent concurrency from having any effect.
 
         Returns
         -------
@@ -1710,6 +1871,8 @@ class VectorLakeClient:
                 intelligent_segmentation, session_id, files, files_meta,
                 on_batch_success=on_batch_success,
                 resume=resume,
+                max_concurrent_batches=max_concurrent_batches,
+                batch_delay=batch_delay,
             )
         except VectorLakeError as exc:
             return exc.to_response()
@@ -1731,6 +1894,8 @@ class VectorLakeClient:
         processing_mode: ProcessingMode = "sequential",
         on_batch_success=None,
         resume: bool = False,
+        max_concurrent_batches: Optional[int] = None,
+        batch_delay: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Refresh (update) **existing** documents in the index.
@@ -1811,6 +1976,8 @@ class VectorLakeClient:
                 intelligent_segmentation, session_id, files, files_meta,
                 on_batch_success=on_batch_success,
                 resume=resume,
+                max_concurrent_batches=max_concurrent_batches,
+                batch_delay=batch_delay,
             )
         except VectorLakeError as exc:
             return exc.to_response()
@@ -1903,6 +2070,8 @@ class VectorLakeClient:
         files_meta: FilesMetaArg = None,
         processing_mode: ProcessingMode = "sequential",
         on_batch_success=None,
+        max_concurrent_batches: Optional[int] = None,
+        batch_delay: Optional[float] = None,
     ) -> Dict[str, Any]:
         """
         Insert documents into the index by reading source files from disk.
@@ -1944,6 +2113,11 @@ class VectorLakeClient:
             of chunks is ready.
             Note: ``"streaming"`` does not support resume via *start_from_batch*
             / *end_batch*; use ``"sequential"`` if you need checkpoint/resume.
+        max_concurrent_batches:
+            (``"streaming"`` only) Maximum number of minibatch uploads
+            allowed to be in flight at once. ``None`` (default) falls back to
+            ``Config.streaming_max_concurrent_batches``. Ignored in
+            ``"sequential"`` mode.
 
         Returns
         -------
@@ -1968,6 +2142,8 @@ class VectorLakeClient:
                 processing_mode, start_from_batch, end_batch,
                 intelligent_segmentation, session_id, files, files_meta,
                 on_batch_success=on_batch_success,
+                max_concurrent_batches=max_concurrent_batches,
+                batch_delay=batch_delay,
             )
         except VectorLakeError as exc:
             return exc.to_response()

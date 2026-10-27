@@ -2,7 +2,7 @@
 exceptions.py — VectorLake SDK exception hierarchy.
 
 """
-
+from __future__ import annotations 
 
 class VectorLakeError(Exception):
     """Base class for all SDK errors."""

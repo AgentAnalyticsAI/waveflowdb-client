@@ -23,6 +23,8 @@ you're extracting outside of the normal upload pipeline (see README:
 "Using Extractors Directly").
 """
 
+from __future__ import annotations 
+
 import csv
 import io
 import logging
@@ -33,7 +35,7 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 try:
-    import fitz  # PyMuPDF
+    import pdfspine.fitz as fitz # PyMuPDF alt
 except ImportError:
     fitz = None
 

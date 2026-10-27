@@ -1,8 +1,9 @@
 """
-waveflowdb_client — VectorLake Python SDK v1.5.0
+waveflowdb_client — VectorLake Python SDK v1.0.7
 """
+from __future__ import annotations 
 
-__version__ = "1.0.6"
+__version__ = "1.0.7"
 
 from .client import VectorLakeClient
 from .config import Config
@@ -65,7 +66,6 @@ __all__ = [
     # Core
     "VectorLakeClient",
     "Config",
-    # Idiomatic façade (Pinecone/Chroma-style)
     "VectorLake",
     "Index",
     # Exceptions

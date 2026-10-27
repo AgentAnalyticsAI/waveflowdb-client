@@ -1,2 +1,15 @@
-**/__pycache__/
-README_ORG.md
+# Python bytecode
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+venv/
+.venv/
+.env
+
+# Build and packaging output
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
