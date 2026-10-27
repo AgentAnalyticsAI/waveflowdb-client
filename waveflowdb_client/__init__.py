@@ -1,6 +1,7 @@
 """
 waveflowdb_client — VectorLake Python SDK v1.0.7
 """
+from __future__ import annotations 
 
 __version__ = "1.0.7"
 

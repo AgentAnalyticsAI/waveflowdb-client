@@ -46,6 +46,7 @@ The minibatch boundaries are controlled by:
 These are separate from max_files_per_batch / max_batch_size_mb, which still
 govern the regular create_batches() path.
 """
+from __future__ import annotations 
 
 import csv
 import hashlib

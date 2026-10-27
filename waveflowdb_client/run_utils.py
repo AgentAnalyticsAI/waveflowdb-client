@@ -40,6 +40,7 @@ noise out of a raw {"reply": {"content": [...]}} response, leaving clean
 {filename: [chunk, ...]} data — used by run_index.py (query/"ringi" results)
 and run_index_lookup.py ("sa" results) to format output before printing/saving.
 """
+from __future__ import annotations 
 
 import hashlib
 import json
