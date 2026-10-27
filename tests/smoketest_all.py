@@ -86,6 +86,13 @@ def check_status(name, operation):
 
     return False
 
+def delete_smoke_docs(index):
+    """Delete every doc this test created, using the ids the server reports."""
+    docs = index.get().get("reply", {}).get("docs", [])
+    ids = [d for d in docs if d.startswith("smoke_")]
+    if not ids:
+        return {"status_code": 200, "message": "nothing to delete"}
+    return index.delete(ids=ids)
 
 def main():
     client = init_client()
@@ -93,6 +100,7 @@ def main():
     setup_test_files()
 
     tests = [
+        ("0. Delete all uploaded files", lambda: delete_smoke_docs(index)),
         ("1. [info] List indexes", lambda: client.list_indexes()),
         ("2. [info] Health check", lambda: client.health()),
         ("3. [info] List Documents in namespace", lambda: index.get()),
@@ -233,7 +241,51 @@ def main():
         )),
         ("44. [delete] Delete direct-text docs", lambda: index.delete(
             ids=["direct_a","direct_d"]
-        ))
+        )),
+        # search: additional Search and Retrieval tests
+        ("45. [search] Default top_k (not passed)", lambda: index.query("refund policy")),
+        ("46. [search] include_data=True (explicit)", lambda: index.query(
+            "refund policy", top_k=5, include_data=True
+        )),
+        ("47. [search] Hybrid filter, single keyword", lambda: index.query(
+            "refund policy", filter=True, filters=["billing"]
+        )),
+
+        # VQL variants
+        ("48. [vql] Uppercase VQL, no FROM, no filter flag", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing}'''
+        )),
+        ("49. [vql] Structured field term {field:value}", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {department:support}''',
+            filter=True,
+        )),
+        ("50. [vql] VQL + search_type=flat", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing or payments}''',
+            filter=True, search_type="flat",
+        )),
+        ("51. [vql] VQL + search_type=flat_filter", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing or payments}''',
+            filter=True, search_type="flat_filter",
+        )),
+        ("52. [vql] VQL with filters set (filters ignored, warning logged)", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing}''',
+            filter=True, filters=["payments"],
+        )),
+        ("53. [vql] VQL, include_data=False", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing}''',
+            filter=True, include_data=False,
+        )),
+        ("54. [vql] VQL with threshold", lambda: index.query(
+            '''SELECT TOP 5 WHERE QUERY IS "refund policy" CONTAINS {billing}''',
+            filter=True, threshold=0.3,
+        )),
+
+        # Keyword search 
+        ("55. [keyword] Braced keyword", lambda: index.keyword_search("{refund}", top_k=5)),
+        ("56. [keyword] Braced keyword, top_k=1", lambda: index.keyword_search("{refund}", top_k=1)),
+        ("57. [keyword] Braced keyword, different term", lambda: index.keyword_search("{billing}", top_k=5)),
+
+        ("58. Delete all uploaded files", lambda: delete_smoke_docs(index))
     ]
     passed = 0
 
