@@ -2,81 +2,67 @@
 
 ## Add Files
 
-Place your source documents in the directory configured by `vector_lake_path` and specify the filenames you want to index:
+Place source documents in the directory configured by `vector_lake_path` and specify the filenames to index:
 
 ```python
 index.add(files=["faq.pdf", "policy.docx"])
 ```
 
-To index all supported files discovered in the configured directory:
+To index all supported files in the configured directory:
 
 ```python
 index.add()
 ```
 
-File ingestion reads from the configured source directory.
+**Note:** Existing filenames are skipped, even if their content has changed. Use `update()` to refresh existing documents.
 
 ## Add Text Directly
 
-You can index text directly without creating a local document file:
+Index text without creating a local file:
 
 ```python
 index.add(
-    documents=[
-        "Employees are entitled to 12 days of paid sick leave per year."
-    ],
+    documents=["Employees are entitled to 12 days of paid sick leave per year."],
     ids=["hr_sick_leave_policy.txt"],
 )
 ```
 
-- `documents`: A list of text entries to index.
-- `ids`: A unique identifier for each text entry.
+- `documents`: Text entries to index.
+- `ids`: Unique identifiers for the entries.
 
-The `documents` and `ids` lists must contain the same number of elements. Use stable, unique IDs to identify and manage your entries.
+Both lists must contain the same number of elements.
 
-## Add Files with Metadata
+## Update Documents
 
-You can associate metadata with individual files during ingestion using a dictionary keyed by the source filename:
-
-```python
-index.add(
-    files=["faq.txt", "policy.txt"],
-    metadatas={
-        "faq.txt": {"department": "finance", "year": 2026},
-        "policy.txt": {"author": "alice"},
-    },
-)
-```
-
-Metadata lets you associate additional information with documents, such as department, author, category, or year.
-
-See [Metadata](metadata.md) for supported metadata formats and filtering options.
-
-## Update Existing Documents
-
-When a source document changes, re-index it so that searches can reflect the updated content.
+Use `update()` to refresh an existing document with its latest content:
 
 ```python
 index.update(files=["policy.docx"])
 ```
 
-Uploading the same file again will be skipped if it has already been processed and recognized by the ingestion system.
-
 ## Insert Documents
 
-Document insertion can add content at a specified position in the indexed corpus.
+Use `insert()` to add content while retaining existing indexed chunks:
 
 ```python
 index.insert(files=["policy.docx"])
 ```
 
+Inserted chunks receive new IDs. Use `index.get()` to retrieve the actual IDs and any ID mappings returned by the operation.
+
 ## Delete Documents
 
-Documents are stored as chunks, each with its own ID. Use the chunk IDs to delete specific chunks.
+Use `index.get()` to retrieve indexed chunk IDs. Chunk IDs follow the format `{file_name}_part{chunk_number}`, without the file extension.
 
 ```python
-index.delete(ids=["faq_part1.pdf", "faq_part3.pdf"])
+# List indexed documents
+index.get()
+
+# Delete specific chunks
+index.delete(ids=["faq_part1", "faq_part2"])
 ```
+
+To delete an entire document, provide the IDs of all its chunks.
 
 ## Inspect Indexed Documents
 

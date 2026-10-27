@@ -12,7 +12,6 @@ Start here based on the task you want to complete.
 | Attach custom metadata | [Metadata](metadata.md) |
 | Configure file processing and OCR | [Document Processing and OCR](document-processing.md) |
 | Understand batches, checkpoints, resume, and logs | [Advanced Ingestion](advanced-ingestion.md) |
-| Review methods and API layers | [API Reference](api-reference.md) |
 | Troubleshoot common problems | [Troubleshooting](troubleshooting.md) |
 
 
