@@ -23,6 +23,8 @@ you're extracting outside of the normal upload pipeline (see README:
 "Using Extractors Directly").
 """
 
+from __future__ import annotations 
+
 import csv
 import io
 import logging

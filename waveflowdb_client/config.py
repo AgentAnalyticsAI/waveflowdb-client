@@ -24,6 +24,7 @@ Priority (highest → lowest) for every setting:
     2. Environment variables / .env file
     3. Hard-coded defaults
 """
+from __future__ import annotations 
 
 import logging
 import os
