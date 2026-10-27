@@ -194,7 +194,6 @@ client.health()
 | Insert documents | Insert documents at a controlled position, where supported | [Document Management](docs/document-management.md) |
 | Search | Retrieve relevant document chunks | [Search and Retrieval](docs/search-and-retrieval.md) |
 | Delete | Remove indexed documents | [Document Management](docs/document-management.md) |
-| Metadata | Attach custom fields for filtering | [Metadata](docs/metadata.md) |
 
 ## Documentation
 
@@ -203,7 +202,6 @@ client.health()
 - [Document Management](docs/document-management.md)
 - [Search and Retrieval](docs/search-and-retrieval.md)
 - [VQL Documentation](docs/VQL_DOCUMENTATION.md)
-- [Metadata](docs/metadata.md)
 - [Document Processing and OCR](docs/document-processing.md)
 - [Advanced Ingestion](docs/advanced-ingestion.md)
 - [Troubleshooting](docs/troubleshooting.md)
