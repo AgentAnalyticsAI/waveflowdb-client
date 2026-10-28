@@ -16,7 +16,7 @@ results = index.query("refund policy", top_k=5)
 | `query_text` | required | Natural-language query, or a raw VQL string |
 | `top_k` | `10` | Maximum number of results |
 | `threshold` | `0.2` | Minimum similarity score |
-| `include_data` | `True` | `True` returns chunk text with each match; `False` returns document metadata only |
+| `include_data` | `True` | `True` returns chunk text with each match |
 | `filter` | `False` | Enables hybrid keyword + vector filtering |
 | `filters` | `None` | Keywords for the hybrid filter (used with `filter=True`) |
 | `search_type` | `None` | `"flat"` or `"flat_filter"` (only with `filter=True`) |
