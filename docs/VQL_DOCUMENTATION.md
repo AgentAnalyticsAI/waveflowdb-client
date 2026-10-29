@@ -71,22 +71,6 @@ results = index.query(query)
 
 Here, `status:shipped` and `city:Delhi` represent field-value constraints. Ensure the field names and values match the data available in your indexed documents.
 
-## Metadata Filters
-
-You can use metadata fields in brace expressions when the backend supports filtering on those fields.
-
-```python
-query = '''SELECT TOP 5
-WHERE QUERY IS "refund policy complaints"
-CONTAINS {userId:ts09ab1234}'''
-
-results = index.query(query)
-```
-
-In this example, `userId` is a metadata field and `ts09ab1234` is the value being matched. Replace them with fields and values that exist in your namespace.
-
-Metadata filtering depends on how metadata was supplied during ingestion and how the backend implements filter matching.
-
 ## Search Modes
 
 VQL retrieval can support different search strategies, depending on the backend configuration.

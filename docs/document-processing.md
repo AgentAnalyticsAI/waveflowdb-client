@@ -15,7 +15,7 @@ The following table summarizes the supported formats and their intended processi
 | `.xlsx` | Convert workbook content into a structured, CSV-like representation. |
 | `.jsonl` | Process individual records and validate JSON lines. |
 | `.json` | Process structured JSON content; atomic handling may depend on the implementation. |
-| `.png`, `.jpg`, `.jpeg`, `.tiff`, `.tif`, `.bmp`, `.webp` | Extract text from images using OCR. |
+| `.png`, `.jpg`, `.jpeg` | Extract text from images using OCR. |
 
 Unsupported formats may be skipped or rejected during ingestion, depending on the implementation.
 
@@ -31,9 +31,36 @@ pip install "waveflowdb-client[documents]"
 
 Local OCR extracts text from scanned pages and images using software installed on your machine.
 
-**Important:** Tesseract must also be installed separately as a system application. Installing `pytesseract` alone does not install the Tesseract executable.
+**Important:** Tesseract must be installed separately as a system application. 
 
-After installation, ensure that the executable is available on your system's `PATH` or configure its location as supported by your environment.
+### Install Tesseract
+
+**macOS (Homebrew)**
+
+```bash
+brew install tesseract
+```
+
+**Ubuntu / Debian**
+
+```bash
+sudo apt update
+sudo apt install tesseract-ocr
+```
+
+**Windows**
+
+Download and install Tesseract OCR from the [UB Mannheim Tesseract releases](https://github.com/UB-Mannheim/tesseract/wiki).
+
+### Verify Installation
+
+Run the following command to confirm that Tesseract is installed:
+
+```bash
+tesseract --version
+```
+
+Ensure the Tesseract executable is available on your system's `PATH`. If it is not, configure the executable location in your Python environment as needed.
 
 ### Configure OCR
 
