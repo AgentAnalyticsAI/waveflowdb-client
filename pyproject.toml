@@ -29,6 +29,7 @@ documents = [
     "python-docx",
     "pdfspine",
     "pytesseract",
+    "openpyxl",
 ]
 
 cloud-ocr = [
