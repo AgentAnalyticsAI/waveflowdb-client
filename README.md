@@ -99,6 +99,13 @@ Place your documents in the folder configured by vector_lake_path when initializ
 index.add(files=["faq.pdf", "policy.docx"])
 ```
 
+### Upload All Documents
+```python
+# Upload all supported files from vector_lake_path
+index.add()
+```
+Chunking and embedding generation are handled internally.
+
 ### Upload Text Content Directly
 You can add text to your namespace without creating or uploading a document file. Paste the text content into the documents list and provide a unique document ID in the ids list.
 ```python
@@ -115,13 +122,6 @@ index.add(
 - ids: A unique identifier for each text entry. Use a descriptive name, such as hr_sick_leave_policy.txt.
 
 For multiple text entries, provide a corresponding ID for each entry. Ensure both lists contain the same number of items.
-
-### Upload All Documents
-```python
-# Upload all supported files from vector_lake_path
-index.add()
-```
-Chunking and embedding generation are handled internally.
 
 ## Upload Documents with OCR
 OCR can help extract text from documents that require optical character recognition.
